@@ -2,8 +2,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Bot, Send, User } from "lucide-react";
+import { AIService } from "@/services/aiService";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ChatMessage {
   id: string;
@@ -17,12 +19,22 @@ export default function Tutor() {
     {
       id: '1',
       role: 'assistant',
-      content: "Hello! I'm your AI tutor. I'm here to help you understand complex topics, solve problems, and answer your questions. What would you like to learn about today?",
+      content: "Hello! I'm your AI tutor powered by advanced AI. I can help you understand complex topics, solve problems, and answer your questions with detailed explanations. What would you like to learn about today?",
       timestamp: new Date()
     }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -38,18 +50,36 @@ export default function Tutor() {
     setInput('');
     setIsLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const aiResponse = await AIService.chatWithTutor(input);
+      
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Great question! Let me help you understand that. Here's a detailed explanation:\n\n1. First, let's break down the key concepts...\n2. Then we'll look at practical examples...\n3. Finally, I'll give you some practice problems to solidify your understanding.\n\nWould you like me to go deeper into any specific aspect?`,
+        content: aiResponse,
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("AI chat error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to get response from AI tutor. Please try again.",
+        variant: "destructive"
+      });
+      
+      // Add error message to chat
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "I apologize, but I'm having trouble connecting to the AI service right now. Please try again in a moment.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -141,6 +171,7 @@ export default function Tutor() {
                   </div>
                 </div>
               )}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}

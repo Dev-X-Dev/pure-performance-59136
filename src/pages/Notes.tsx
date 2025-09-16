@@ -403,6 +403,14 @@ export default function NotesPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8"
+                            onClick={() => updateNote(note.id, { is_favorite: !note.is_favorite })}
+                          >
+                            <Star className={`h-3 w-3 ${note.is_favorite ? 'text-yellow-500 fill-current' : ''}`} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
                             onClick={() => {
                               setSelectedNote(note);
                               setDialogOpen(true);
