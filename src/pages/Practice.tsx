@@ -198,13 +198,28 @@ export default function Practice() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start" 
+                  size="sm"
+                  onClick={() => window.location.href = '/notes'}
+                >
                   📚 Review Notes
                 </Button>
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start" 
+                  size="sm"
+                  onClick={() => window.location.href = '/notes?quiz=true'}
+                >
                   🧠 Take Quiz
                 </Button>
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start" 
+                  size="sm"
+                  onClick={() => window.location.href = '/notes?practice=true'}
+                >
                   ✍️ Practice Problems
                 </Button>
               </div>

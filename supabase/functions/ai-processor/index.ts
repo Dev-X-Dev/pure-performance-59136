@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 interface AIRequest {
-  action: 'condense' | 'flashcards' | 'quiz' | 'chat';
+  action: 'condense' | 'flashcards' | 'quiz' | 'chat' | 'practice-problems';
   content?: string;
   noteIds?: string[];
   message?: string;
@@ -36,25 +36,29 @@ serve(async (req) => {
     const { data: { user } } = await supabaseClient.auth.getUser()
     if (!user) throw new Error('Unauthorized')
 
-    const openaiKey = Deno.env.get('OPENAI_API_KEY')
-    if (!openaiKey) throw new Error('OpenAI API key not configured')
+    const groqKey = Deno.env.get('GROQ_API_KEY')
+    if (!groqKey) throw new Error('Groq API key not configured')
 
     let result
     
     switch (action) {
       case 'condense':
-        result = await condenseNotes(content || '', openaiKey)
+        result = await condenseNotes(content || '', groqKey)
         break
       case 'flashcards':
         const notesContent = await fetchNotesContent(supabaseClient, noteIds || [], user.id)
-        result = await generateFlashcards(notesContent, openaiKey, difficulty)
+        result = await generateFlashcards(notesContent, groqKey, difficulty)
         break
       case 'quiz':
         const quizContent = await fetchNotesContent(supabaseClient, noteIds || [], user.id)
-        result = await generateQuiz(quizContent, openaiKey, difficulty)
+        result = await generateQuiz(quizContent, groqKey, difficulty)
         break
       case 'chat':
-        result = await chatWithAI(message || '', openaiKey)
+        result = await chatWithAI(message || '', groqKey)
+        break
+      case 'practice-problems':
+        const problemsContent = content || await fetchNotesContent(supabaseClient, noteIds || [], user.id)
+        result = await generatePracticeProblems(problemsContent, groqKey, difficulty)
         break
       default:
         throw new Error('Invalid action')
@@ -88,14 +92,14 @@ async function fetchNotesContent(supabase: any, noteIds: string[], userId: strin
 }
 
 async function condenseNotes(content: string, apiKey: string): Promise<string> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.1-70b-versatile',
       messages: [
         {
           role: 'system',
@@ -116,14 +120,14 @@ async function condenseNotes(content: string, apiKey: string): Promise<string> {
 }
 
 async function generateFlashcards(content: string, apiKey: string, difficulty: string): Promise<any[]> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.1-70b-versatile',
       messages: [
         {
           role: 'system',
@@ -148,14 +152,14 @@ async function generateFlashcards(content: string, apiKey: string, difficulty: s
 }
 
 async function generateQuiz(content: string, apiKey: string, difficulty: string): Promise<any[]> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.1-70b-versatile',
       messages: [
         {
           role: 'system',
@@ -180,14 +184,14 @@ async function generateQuiz(content: string, apiKey: string, difficulty: string)
 }
 
 async function chatWithAI(message: string, apiKey: string): Promise<string> {
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.1-70b-versatile',
       messages: [
         {
           role: 'system',
@@ -200,6 +204,34 @@ async function chatWithAI(message: string, apiKey: string): Promise<string> {
       ],
       max_tokens: 1000,
       temperature: 0.7
+    })
+  })
+  
+  const data = await response.json()
+  return data.choices[0].message.content
+}
+
+async function generatePracticeProblems(content: string, apiKey: string, difficulty: string): Promise<string> {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'llama-3.1-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: `Generate ${difficulty} level practice problems based on the given content. Create 3-5 problems with detailed solutions. Include the problem statement and step-by-step solutions.`
+        },
+        {
+          role: 'user',
+          content: `Generate practice problems from this content:\n\n${content}`
+        }
+      ],
+      max_tokens: 2500,
+      temperature: 0.5
     })
   })
   

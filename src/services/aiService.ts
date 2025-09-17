@@ -48,4 +48,13 @@ export class AIService {
     if (error) throw error;
     return data.result;
   }
+
+  static async generatePracticeProblems(content: string, difficulty: 'easy' | 'medium' | 'hard' = 'medium'): Promise<string> {
+    const { data, error } = await supabase.functions.invoke('ai-processor', {
+      body: { action: 'practice-problems', content, difficulty }
+    });
+
+    if (error) throw error;
+    return data.result;
+  }
 }

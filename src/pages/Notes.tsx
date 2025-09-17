@@ -14,8 +14,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Note } from "@/types";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Search, Star, Edit, Trash2 } from "lucide-react";
+import { Plus, Search, Star, Edit, Trash2, Brain, Target, BookOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { FlashcardGenerator } from "@/components/FlashcardGenerator";
+import { QuizGenerator } from "@/components/QuizGenerator";
+import { PracticeProblems } from "@/components/PracticeProblems";
 
 function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -56,33 +60,24 @@ function useNotes() {
     }
   };
 
-  useEffect(() => {
-    fetchNotes();
-  }, [user]);
-
-  const createNote = async (title: string, content: string, tags: string[]) => {
+  const createNote = async (noteData: Partial<Note>) => {
     if (!user) return;
 
     try {
       const { data, error } = await supabase
         .from('notes')
         .insert({
-          title,
-          content,
-          tags,
+          ...noteData,
           user_id: user.id,
         })
         .select()
         .single();
 
-      if (error) {
-        console.error('Error creating note:', error);
-        toast.error('Failed to create note');
-        return;
-      }
+      if (error) throw error;
 
       setNotes(prev => [data, ...prev]);
-      toast.success('Note created successfully!');
+      toast.success('Note created successfully');
+      return data;
     } catch (error) {
       console.error('Error creating note:', error);
       toast.error('Failed to create note');
@@ -90,25 +85,19 @@ function useNotes() {
   };
 
   const updateNote = async (id: string, updates: Partial<Note>) => {
-    if (!user) return;
-
     try {
       const { data, error } = await supabase
         .from('notes')
         .update(updates)
         .eq('id', id)
-        .eq('user_id', user.id)
         .select()
         .single();
 
-      if (error) {
-        console.error('Error updating note:', error);
-        toast.error('Failed to update note');
-        return;
-      }
+      if (error) throw error;
 
       setNotes(prev => prev.map(note => note.id === id ? data : note));
-      toast.success('Note updated successfully!');
+      toast.success('Note updated successfully');
+      return data;
     } catch (error) {
       console.error('Error updating note:', error);
       toast.error('Failed to update note');
@@ -116,174 +105,207 @@ function useNotes() {
   };
 
   const deleteNote = async (id: string) => {
-    if (!user) return;
-
     try {
       const { error } = await supabase
         .from('notes')
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
 
-      if (error) {
-        console.error('Error deleting note:', error);
-        toast.error('Failed to delete note');
-        return;
-      }
+      if (error) throw error;
 
       setNotes(prev => prev.filter(note => note.id !== id));
-      toast.success('Note deleted successfully!');
+      toast.success('Note deleted successfully');
     } catch (error) {
       console.error('Error deleting note:', error);
       toast.error('Failed to delete note');
     }
   };
 
-  return { notes, loading, createNote, updateNote, deleteNote };
+  useEffect(() => {
+    fetchNotes();
+  }, [user]);
+
+  return {
+    notes,
+    loading,
+    createNote,
+    updateNote,
+    deleteNote,
+    refetch: fetchNotes,
+  };
 }
 
-function NoteDialog({ 
-  note, 
-  open, 
-  onOpenChange, 
-  onSave 
-}: { 
-  note?: Note; 
-  open: boolean; 
+interface NoteDialogProps {
+  note?: Note | null;
+  open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (title: string, content: string, tags: string[]) => void;
-}) {
-  const [title, setTitle] = useState(note?.title || '');
-  const [content, setContent] = useState(note?.content || '');
-  const [tagsInput, setTagsInput] = useState(note?.tags?.join(', ') || '');
+  onSave: (noteData: Partial<Note>) => Promise<void>;
+}
+
+function NoteDialog({ note, open, onOpenChange, onSave }: NoteDialogProps) {
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [tags, setTags] = useState('');
 
   useEffect(() => {
     if (note) {
-      setTitle(note.title);
-      setContent(note.content);
-      setTagsInput(note.tags?.join(', ') || '');
+      setTitle(note.title || '');
+      setContent(note.content || '');
+      setTags(note.tags?.join(', ') || '');
     } else {
       setTitle('');
       setContent('');
-      setTagsInput('');
+      setTags('');
     }
   }, [note, open]);
 
-  const handleSave = () => {
-    if (!title.trim()) {
-      toast.error('Please enter a title');
-      return;
-    }
+  const handleSave = async () => {
+    const noteData = {
+      title,
+      content,
+      tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+    };
 
-    const tags = tagsInput
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag.length > 0);
-
-    onSave(title, content, tags);
+    await onSave(noteData);
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>{note ? 'Edit Note' : 'Create New Note'}</DialogTitle>
+          <DialogTitle>{note ? 'Edit Note' : 'Create Note'}</DialogTitle>
           <DialogDescription>
-            {note ? 'Make changes to your note' : 'Create a new note to save your thoughts'}
+            {note ? 'Update your note details.' : 'Add a new note to your collection.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="note-title">Title</Label>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="title">Title</Label>
             <Input
-              id="note-title"
+              id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter note title..."
+              placeholder="Note title..."
             />
           </div>
-          <div>
-            <Label htmlFor="note-content">Content</Label>
+          <div className="grid gap-2">
+            <Label htmlFor="content">Content</Label>
             <Textarea
-              id="note-content"
+              id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your note content here..."
-              rows={10}
+              placeholder="Write your note content..."
+              className="min-h-[100px]"
             />
           </div>
-          <div>
-            <Label htmlFor="note-tags">Tags (comma-separated)</Label>
+          <div className="grid gap-2">
+            <Label htmlFor="tags">Tags</Label>
             <Input
-              id="note-tags"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="study, math, important..."
+              id="tags"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="tag1, tag2, tag3..."
             />
           </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>
-              {note ? 'Save Changes' : 'Create Note'}
-            </Button>
-          </div>
+        </div>
+        <div className="flex justify-end space-x-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave}>
+            {note ? 'Update' : 'Create'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-export default function NotesPage() {
-  const { notes, loading, createNote, updateNote, deleteNote } = useNotes();
-  const [filter, setFilter] = useState("");
-  const [selectedNote, setSelectedNote] = useState<Note | undefined>();
+export default function Notes() {
+  const [params] = useSearchParams();
+  const showQuiz = params.get("quiz") === "true";
+  const showPractice = params.get("practice") === "true";
+  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showFlashcards, setShowFlashcards] = useState(false);
+  const [showQuizViewer, setShowQuizViewer] = useState(showQuiz);
+  const [showPracticeProblems, setShowPracticeProblems] = useState(showPractice);
+  const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
 
-  const tags = useMemo(
-    () => Array.from(new Set(notes.flatMap((n) => n.tags || []))).sort(),
-    [notes],
-  );
+  const { notes, loading, createNote, updateNote, deleteNote } = useNotes();
 
-  const filtered = useMemo(() => {
-    const f = filter.toLowerCase();
-    let list = notes.slice();
-    
-    // Favorites first, then by updated date
-    list.sort((a, b) => {
-      if (a.is_favorite && !b.is_favorite) return -1;
-      if (!a.is_favorite && b.is_favorite) return 1;
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  const filteredNotes = useMemo(() => {
+    return notes.filter(note => {
+      const matchesSearch = !searchTerm || 
+        note.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        note.content?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesTag = !selectedTag || 
+        note.tags?.some(tag => tag.toLowerCase().includes(selectedTag.toLowerCase()));
+
+      return matchesSearch && matchesTag;
     });
-    
-    if (!f) return list;
-    
-    return list.filter(
-      (n) =>
-        n.title.toLowerCase().includes(f) ||
-        n.content.toLowerCase().includes(f) ||
-        (n.tags || []).some((t) => t.toLowerCase().includes(f)),
-    );
-  }, [filter, notes]);
+  }, [notes, searchTerm, selectedTag]);
 
-  const handleCreateNote = (title: string, content: string, tags: string[]) => {
-    createNote(title, content, tags);
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    notes.forEach(note => {
+      note.tags?.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet);
+  }, [notes]);
+
+  const handleCreateNote = async (noteData: Partial<Note>) => {
+    await createNote(noteData);
   };
 
-  const handleUpdateNote = (title: string, content: string, tags: string[]) => {
+  const handleUpdateNote = async (noteData: Partial<Note>) => {
     if (selectedNote) {
-      updateNote(selectedNote.id, { title, content, tags });
+      await updateNote(selectedNote.id, noteData);
     }
   };
 
-  if (loading) {
+  const toggleNoteSelection = (noteId: string) => {
+    setSelectedNotes(prev => 
+      prev.includes(noteId) 
+        ? prev.filter(id => id !== noteId)
+        : [...prev, noteId]
+    );
+  };
+
+  if (showFlashcards) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
+        <FlashcardGenerator
+          noteIds={selectedNotes}
+          onClose={() => setShowFlashcards(false)}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (showQuizViewer) {
+    return (
+      <AppLayout>
+        <QuizGenerator
+          noteIds={selectedNotes.length > 0 ? selectedNotes : notes.map(n => n.id)}
+          onClose={() => setShowQuizViewer(false)}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (showPracticeProblems) {
+    return (
+      <AppLayout>
+        <PracticeProblems
+          noteIds={selectedNotes.length > 0 ? selectedNotes : notes.map(n => n.id)}
+          onClose={() => setShowPracticeProblems(false)}
+        />
       </AppLayout>
     );
   }
@@ -291,168 +313,194 @@ export default function NotesPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">My Notes</h1>
             <p className="text-muted-foreground">
-              Organize your thoughts and ideas
+              Organize and study your notes with AI-powered tools
             </p>
           </div>
-          <Button 
-            onClick={() => {
-              setSelectedNote(undefined);
-              setDialogOpen(true);
-            }}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Note
-          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setSelectedNote(null)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Note
+              </Button>
+            </DialogTrigger>
+          </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar */}
-          <div className="lg:col-span-1 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Search</CardTitle>
-              </CardHeader>
-              <CardContent>
+        {/* Search and Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Search & Filter</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search notes..."
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                    className="pl-9"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
                   />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <div className="sm:w-48">
+                <Input
+                  placeholder="Filter by tag..."
+                  value={selectedTag}
+                  onChange={(e) => setSelectedTag(e.target.value)}
+                />
+              </div>
+            </div>
 
-            {tags.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Tags</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="secondary"
-                        className="cursor-pointer hover:bg-secondary/80"
-                        onClick={() => setFilter(tag)}
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Notes Grid */}
-          <div className="lg:col-span-3">
-            {filtered.length === 0 ? (
-              <Card className="p-12 text-center">
-                <div className="text-muted-foreground">
-                  {notes.length === 0 ? (
-                    <>
-                      <div className="text-6xl mb-4">📝</div>
-                      <h3 className="text-lg font-semibold mb-2">No notes yet</h3>
-                      <p className="mb-4">Create your first note to get started!</p>
-                      <Button 
-                        onClick={() => {
-                          setSelectedNote(undefined);
-                          setDialogOpen(true);
-                        }}
-                      >
-                        Create First Note
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-4xl mb-4">🔍</div>
-                      <p>No notes match your search.</p>
-                    </>
-                  )}
-                </div>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filtered.map((note) => (
-                  <Card key={note.id} className="group hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg line-clamp-2 group-hover:text-primary transition-colors">
-                            {note.title}
-                          </CardTitle>
-                          <CardDescription className="text-xs">
-                            {new Date(note.updated_at).toLocaleDateString()} •{' '}
-                            {new Date(note.updated_at).toLocaleTimeString()}
-                          </CardDescription>
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {note.is_favorite && (
-                            <Star className="h-4 w-4 text-yellow-500 fill-current" />
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => updateNote(note.id, { is_favorite: !note.is_favorite })}
-                          >
-                            <Star className={`h-3 w-3 ${note.is_favorite ? 'text-yellow-500 fill-current' : ''}`} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => {
-                              setSelectedNote(note);
-                              setDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => deleteNote(note.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-                        {note.content || 'No content...'}
-                      </p>
-                      {note.tags && note.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {note.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {note.tags.length > 3 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{note.tags.length - 3}
-                            </Badge>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+            {/* AI Tools */}
+            {selectedNotes.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2 border-t">
+                <p className="text-sm text-muted-foreground mb-2 w-full">
+                  {selectedNotes.length} notes selected - Use AI tools:
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowFlashcards(true)}
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Generate Flashcards
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowQuizViewer(true)}
+                >
+                  <Brain className="h-4 w-4 mr-2" />
+                  Create Quiz
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowPracticeProblems(true)}
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  Practice Problems
+                </Button>
               </div>
             )}
-          </div>
+          </CardContent>
+        </Card>
+
+        {/* Notes Display */}
+        <div className="space-y-4">
+          {loading ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Loading notes...</p>
+            </div>
+          ) : filteredNotes.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">📝</div>
+              <h3 className="text-lg font-semibold mb-2">
+                {notes.length === 0 ? 'No notes yet' : 'No matching notes'}
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                {notes.length === 0 
+                  ? 'Create your first note to get started with studying'
+                  : 'Try adjusting your search or filters'
+                }
+              </p>
+              {notes.length === 0 && (
+                <Button onClick={() => setDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create First Note
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredNotes.map((note) => (
+                <Card 
+                  key={note.id} 
+                  className={`cursor-pointer transition-all hover:shadow-md ${
+                    selectedNotes.includes(note.id) ? 'ring-2 ring-primary' : ''
+                  }`}
+                  onClick={() => toggleNoteSelection(note.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-base truncate">
+                          {note.title || 'Untitled'}
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          {new Date(note.updated_at!).toLocaleDateString()}
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center space-x-1 ml-2">
+                        {note.is_favorite && (
+                          <Star className="h-4 w-4 text-yellow-500 fill-current" />
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateNote(note.id, { is_favorite: !note.is_favorite });
+                          }}
+                        >
+                          <Star className={`h-3 w-3 ${note.is_favorite ? 'text-yellow-500 fill-current' : ''}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedNote(note);
+                            setDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteNote(note.id);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
+                      {note.content || 'No content...'}
+                    </p>
+                    {note.tags && note.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {note.tags.slice(0, 3).map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {note.tags.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{note.tags.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
 
         <NoteDialog
