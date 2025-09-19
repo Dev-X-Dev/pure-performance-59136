@@ -43,31 +43,57 @@ serve(async (req) => {
     // Generate educational content using AI
     const scrapingResults = await generateEducationalContent(topic, sources, groqKey, user.id, supabaseClient, jobId)
 
-    // Create a note in the existing notes table for now
-    const { data: savedNote, error: saveError } = await supabaseClient
-      .from('notes')
-      .insert({
-        title: topic,
-        content: scrapingResults.condensedNotes,
-        tags: scrapingResults.keyPoints.slice(0, 5), // Use first 5 key points as tags
-        user_id: user.id
-      })
-      .select()
-      .single()
+    // Try to save to scraped_notes table first, fallback to notes table
+    let savedNote
+    let transformedNote
+    
+    try {
+      // Attempt to save to scraped_notes table
+      const { data: scrapedNote, error: scrapedError } = await supabaseClient
+        .from('scraped_notes')
+        .insert({
+          topic,
+          key_points: scrapingResults.keyPoints,
+          sources: scrapingResults.sources,
+          condensed_notes: scrapingResults.condensedNotes,
+          raw_data: scrapingResults.rawData,
+          user_id: user.id
+        })
+        .select()
+        .single()
 
-    if (saveError) throw saveError
+      if (scrapedError) throw scrapedError
+      
+      transformedNote = scrapedNote
+    } catch (error) {
+      console.warn('Scraped notes table not found, using regular notes table:', error)
+      
+      // Fallback to saving in regular notes table
+      const { data: regularNote, error: regularError } = await supabaseClient
+        .from('notes')
+        .insert({
+          title: topic,
+          content: scrapingResults.condensedNotes,
+          tags: scrapingResults.keyPoints.slice(0, 5), // Use first 5 key points as tags
+          user_id: user.id
+        })
+        .select()
+        .single()
 
-    // Transform to expected format
-    const transformedNote = {
-      id: savedNote.id,
-      topic: savedNote.title,
-      key_points: scrapingResults.keyPoints,
-      sources: scrapingResults.sources,
-      condensed_notes: savedNote.content,
-      raw_data: scrapingResults.rawData,
-      created_at: savedNote.created_at,
-      updated_at: savedNote.updated_at,
-      user_id: savedNote.user_id
+      if (regularError) throw regularError
+
+      // Transform to expected format
+      transformedNote = {
+        id: regularNote.id,
+        topic: regularNote.title,
+        key_points: scrapingResults.keyPoints,
+        sources: scrapingResults.sources,
+        condensed_notes: regularNote.content,
+        raw_data: scrapingResults.rawData,
+        created_at: regularNote.created_at,
+        updated_at: regularNote.updated_at,
+        user_id: regularNote.user_id
+      }
     }
 
     return new Response(

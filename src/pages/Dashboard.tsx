@@ -7,7 +7,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { EducationalScraperDemo } from "@/components/EducationalScraperDemo";
 import { store } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -37,34 +36,56 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="sticky top-[4.5rem] z-10 bg-card/60 backdrop-blur rounded-t-lg">
-            <CardTitle>Quick Search</CardTitle>
+            <CardTitle>Intelligent Search & Content Generation</CardTitle>
             <CardDescription>
-              Search any topic to explore notes, AI summaries, and practice.
+              Search existing notes or generate new educational content with AI for any topic.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center gap-2">
+          <CardContent className="space-y-4">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!q.trim()) return;
                 const next = [q, ...recents.filter((x) => x !== q)].slice(0, 8);
                 store.set("recent:topics", next);
-                navigate(`/explore?q=${encodeURIComponent(q)}`);
+                navigate(`/explore?q=${encodeURIComponent(q)}&generate=true`);
               }}
               className="flex w-full gap-2"
             >
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Try 'Photosynthesis' or 'Derivative rules'"
+                placeholder="Try 'Photosynthesis', 'Calculus Derivatives', or 'Machine Learning'"
               />
-              <Button type="submit">Search</Button>
+              <Button type="submit">Search & Generate</Button>
             </form>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  if (!q.trim()) return;
+                  navigate(`/explore?q=${encodeURIComponent(q)}&mode=search`);
+                }}
+                disabled={!q.trim()}
+              >
+                Search Only
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  if (!q.trim()) return;
+                  navigate(`/explore?q=${encodeURIComponent(q)}&mode=generate`);
+                }}
+                disabled={!q.trim()}
+              >
+                Generate Only
+              </Button>
+            </div>
           </CardContent>
         </Card>
-
-        {/* Educational Scraper Demo */}
-        <EducationalScraperDemo />
 
         {/* Dashboard Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

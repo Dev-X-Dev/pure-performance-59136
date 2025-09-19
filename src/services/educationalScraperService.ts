@@ -28,7 +28,7 @@ export interface ScrapingJob {
 
 export class EducationalScraperService {
   static async searchNotes(searchTerm: string): Promise<ScrapedNote[]> {
-    // For now, search in existing notes table until new tables are created
+    // Always fall back to searching regular notes since new tables may not exist
     const { data, error } = await supabase
       .from('notes')
       .select('*')
@@ -52,7 +52,7 @@ export class EducationalScraperService {
   }
 
   static async startScraping(topic: string, sources: string[] = ['educational']): Promise<{ result: ScrapedNote }> {
-    // Call the educational scraper edge function directly
+    // Call the educational scraper edge function
     const { data, error } = await supabase.functions.invoke('educational-scraper', {
       body: { topic, sources }
     });
@@ -65,7 +65,7 @@ export class EducationalScraperService {
   }
 
   static async fetchSavedNotes(limit: number = 50): Promise<ScrapedNote[]> {
-    // Use existing notes table for now
+    // Always use regular notes table for now
     const { data, error } = await supabase
       .from('notes')
       .select('*')
@@ -89,11 +89,12 @@ export class EducationalScraperService {
   }
 
   static async fetchScrapingJobs(): Promise<ScrapingJob[]> {
-    // Return empty array for now until scraping_jobs table is created
+    // Return empty array until new tables are created
     return [];
   }
 
   static async deleteNote(noteId: string): Promise<void> {
+    // Delete from regular notes table
     const { error } = await supabase
       .from('notes')
       .delete()
@@ -103,7 +104,7 @@ export class EducationalScraperService {
   }
 
   static async getJobStatus(jobId: string): Promise<ScrapingJob | null> {
-    // Return null for now until scraping_jobs table is created
+    // Return null until scraping_jobs table is created
     return null;
   }
 
