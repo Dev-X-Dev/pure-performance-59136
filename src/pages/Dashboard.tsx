@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { EducationalScraperDemo } from "@/components/EducationalScraperDemo";
 import { store } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -61,6 +62,9 @@ export default function Dashboard() {
             </form>
           </CardContent>
         </Card>
+
+        {/* Educational Scraper Demo */}
+        <EducationalScraperDemo />
 
         {/* Dashboard Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

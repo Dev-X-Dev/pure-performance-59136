@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { EducationalScraperService } from "@/services/educationalScraperService";
 
 export interface CrawlResult {
   source: string;
@@ -10,17 +10,27 @@ export interface CrawlResult {
 
 export class CrawlerService {
   static async crawlTopic(topic: string, sources?: string[]): Promise<CrawlResult[]> {
-    const { data, error } = await supabase.functions.invoke('web-crawler', {
-      body: { topic, sources }
-    });
-
-    if (error) throw error;
-    return data.results || [];
+    try {
+      return await EducationalScraperService.crawlTopic(topic, sources);
+    } catch (error) {
+      console.error('Crawler service error:', error);
+      throw error;
+    }
   }
 
   static async getCrawledContent(topic: string): Promise<CrawlResult[]> {
-    // For now, return empty array until crawled_content table is created
-    // This will be replaced once the Supabase migration is run
-    return [];
+    try {
+      const notes = await EducationalScraperService.getCrawledContent(topic);
+      return notes.map(note => ({
+        source: 'Educational AI Content',
+        topic: note.topic,
+        content: note.condensed_notes,
+        url: `#/notes/${note.id}`,
+        crawled_at: note.created_at
+      }));
+    } catch (error) {
+      console.error('Error getting crawled content:', error);
+      return [];
+    }
   }
 }

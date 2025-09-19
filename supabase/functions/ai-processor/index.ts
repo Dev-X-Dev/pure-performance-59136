@@ -39,6 +39,8 @@ serve(async (req) => {
     const groqKey = Deno.env.get('GROQ_API_KEY')
     if (!groqKey) throw new Error('Groq API key not configured')
 
+    console.log('AI Processor request:', { action, noteIds, difficulty })
+
     let result
     
     switch (action) {
