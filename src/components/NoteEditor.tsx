@@ -10,6 +10,7 @@ import { Note } from "@/types";
 import { ArrowLeft, Save, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { NoteAttachments } from "@/components/NoteAttachments";
 
 interface NoteEditorProps {
   note: Note;
@@ -135,6 +136,10 @@ export function NoteEditor({ note, onClose, onSave }: NoteEditorProps) {
               className="min-h-[500px] font-mono text-sm"
             />
           </div>
+
+          {note.id && !note.id.startsWith('temp-') && (
+            <NoteAttachments noteId={note.id} />
+          )}
         </div>
       </div>
 

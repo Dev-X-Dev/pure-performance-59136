@@ -16,7 +16,7 @@ import { Note } from "@/types";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Search, Star, Edit, Trash2, Brain, Target, BookOpen, FileText } from "lucide-react";
+import { Plus, Search, Star, Edit, Trash2, Brain, Target, BookOpen, FileText, Paperclip } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -31,28 +31,47 @@ import { QuizGenerator } from "@/components/QuizGenerator";
 import { PracticeProblems } from "@/components/PracticeProblems";
 import { NoteEditor } from "@/components/NoteEditor";
 
+interface NoteWithAttachments extends Note {
+  attachment_count?: number;
+}
+
 function useNotes() {
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState<NoteWithAttachments[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
 
   const fetchNotes = async () => {
     if (!user) return;
-    
+
     try {
-      const { data, error } = await supabase
+      const { data: notesData, error: notesError } = await supabase
         .from('notes')
         .select('*')
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching notes:', error);
+      if (notesError) {
+        console.error('Error fetching notes:', notesError);
         toast.error('Failed to load notes');
         return;
       }
 
-      setNotes(data || []);
+      const { data: attachmentCounts } = await supabase
+        .from('note_attachments')
+        .select('note_id')
+        .eq('user_id', user.id);
+
+      const countMap = attachmentCounts?.reduce((acc, item) => {
+        acc[item.note_id] = (acc[item.note_id] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      const notesWithCounts = (notesData || []).map(note => ({
+        ...note,
+        attachment_count: countMap[note.id] || 0
+      }));
+
+      setNotes(notesWithCounts);
     } catch (error) {
       console.error('Error fetching notes:', error);
       toast.error('Failed to load notes');
@@ -510,20 +529,30 @@ export default function Notes() {
                     <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
                       {note.content || 'No content...'}
                     </p>
-                    {note.tags && note.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {note.tags.slice(0, 3).map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {note.tags.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{note.tags.length - 3}
-                          </Badge>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-1 flex-1">
+                        {note.tags && note.tags.length > 0 && (
+                          <>
+                            {note.tags.slice(0, 3).map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {note.tags.length > 3 && (
+                              <Badge variant="outline" className="text-xs">
+                                +{note.tags.length - 3}
+                              </Badge>
+                            )}
+                          </>
                         )}
                       </div>
-                    )}
+                      {note.attachment_count && note.attachment_count > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Paperclip className="h-3 w-3" />
+                          <span>{note.attachment_count}</span>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
