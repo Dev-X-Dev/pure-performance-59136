@@ -16,7 +16,7 @@ import { Note } from "@/types";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Search, Star, Edit, Trash2, Brain, Target, BookOpen } from "lucide-react";
+import { Plus, Search, Star, Edit, Trash2, Brain, Target, BookOpen, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { FlashcardGenerator } from "@/components/FlashcardGenerator";
 import { QuizGenerator } from "@/components/QuizGenerator";
 import { PracticeProblems } from "@/components/PracticeProblems";
+import { NoteEditor } from "@/components/NoteEditor";
 
 function useNotes() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -235,6 +236,7 @@ export default function Notes() {
   const [showQuizViewer, setShowQuizViewer] = useState(showQuiz);
   const [showPracticeProblems, setShowPracticeProblems] = useState(showPractice);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
+  const [noteInEditor, setNoteInEditor] = useState<Note | null>(null);
 
   const { notes, loading, createNote, updateNote, deleteNote } = useNotes();
 
@@ -305,6 +307,21 @@ export default function Notes() {
         <PracticeProblems
           noteIds={selectedNotes.length > 0 ? selectedNotes : notes.map(n => n.id)}
           onClose={() => setShowPracticeProblems(false)}
+        />
+      </AppLayout>
+    );
+  }
+
+  if (noteInEditor) {
+    return (
+      <AppLayout>
+        <NoteEditor
+          note={noteInEditor}
+          onClose={() => setNoteInEditor(null)}
+          onSave={async (noteData) => {
+            await updateNote(noteInEditor.id, noteData);
+            setNoteInEditor(null);
+          }}
         />
       </AppLayout>
     );
@@ -451,6 +468,17 @@ export default function Notes() {
                           }}
                         >
                           <Star className={`h-3 w-3 ${note.is_favorite ? 'text-yellow-500 fill-current' : ''}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNoteInEditor(note);
+                          }}
+                        >
+                          <FileText className="h-3 w-3" />
                         </Button>
                         <Button
                           variant="ghost"

@@ -7,11 +7,12 @@ const corsHeaders = {
 }
 
 interface AIRequest {
-  action: 'condense' | 'flashcards' | 'quiz' | 'chat' | 'practice-problems';
+  action: 'condense' | 'flashcards' | 'quiz' | 'chat' | 'practice-problems' | 'edit-note';
   content?: string;
   noteIds?: string[];
   message?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+  prompt?: string;
 }
 
 serve(async (req) => {
@@ -20,7 +21,7 @@ serve(async (req) => {
   }
 
   try {
-    const { action, content, noteIds, message, difficulty = 'medium' }: AIRequest = await req.json()
+    const { action, content, noteIds, message, difficulty = 'medium', prompt }: AIRequest = await req.json()
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -61,6 +62,9 @@ serve(async (req) => {
       case 'practice-problems':
         const problemsContent = content || await fetchNotesContent(supabaseClient, noteIds || [], user.id)
         result = await generatePracticeProblems(problemsContent, groqKey, difficulty)
+        break
+      case 'edit-note':
+        result = await editNoteWithAI(content || '', prompt || '', groqKey)
         break
       default:
         throw new Error('Invalid action')
@@ -234,6 +238,36 @@ async function generatePracticeProblems(content: string, apiKey: string, difficu
       ],
       max_tokens: 2500,
       temperature: 0.5
+    })
+  })
+  
+  const data = await response.json()
+  return data.choices[0].message.content
+}
+
+async function editNoteWithAI(content: string, prompt: string, apiKey: string): Promise<string> {
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a helpful AI assistant that edits note content based on user instructions. 
+          You should modify the content according to the user's request while maintaining the overall structure and meaning unless specifically asked to change it.
+          Return ONLY the edited content, without any explanations or meta-commentary.`
+        },
+        {
+          role: 'user',
+          content: `Here is the current note content:\n\n${content}\n\nPlease make the following changes:\n${prompt}`
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
     })
   })
   

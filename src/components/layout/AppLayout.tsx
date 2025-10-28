@@ -16,9 +16,11 @@ import {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Moon,
   SunMedium,
@@ -110,6 +112,7 @@ function Header() {
 function AppSidebar() {
   const location = useLocation();
   const { user } = useAuth();
+  const { setOpenMobile } = useSidebar();
 
   const navigation = [
     {
@@ -126,6 +129,7 @@ function AppSidebar() {
       title: "Explore",
       url: "/explore",
       icon: Search,
+      badge: "Beta",
     },
     {
       title: "AI Tutor",
@@ -141,6 +145,7 @@ function AppSidebar() {
       title: "Groups",
       url: "/groups",
       icon: Users,
+      badge: "Soon",
     },
   ];
 
@@ -181,9 +186,22 @@ function AppSidebar() {
                     asChild 
                     isActive={location.pathname === item.url}
                   >
-                    <NavLink to={item.url}>
+                    <NavLink 
+                      to={item.url}
+                      onClick={() => setOpenMobile(false)}
+                    >
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="flex items-center gap-2">
+                        {item.title}
+                        {item.badge && (
+                          <Badge 
+                            variant="secondary" 
+                            className="text-[10px] px-1.5 py-0 h-4"
+                          >
+                            {item.badge}
+                          </Badge>
+                        )}
+                      </span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
