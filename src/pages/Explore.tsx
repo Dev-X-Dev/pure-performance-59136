@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Search, ExternalLink, BookOpen, Sparkles, Download } from "lucide-react";
 import { store } from "@/lib/store";
@@ -12,15 +12,21 @@ import { AIService } from "@/services/aiService";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import { NoteEditor } from "@/components/NoteEditor";
+import { Note } from "@/types";
 
 export default function Explore() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const [query, setQuery] = useState(params.get("q") || "");
   const [results, setResults] = useState<CrawlResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [condensedContent, setCondensedContent] = useState<string>("");
   const [condensing, setCondensing] = useState(false);
+  const [studyingResult, setStudyingResult] = useState<CrawlResult | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
@@ -94,13 +100,13 @@ export default function Explore() {
 
   const handleCondenseContent = async () => {
     if (results.length === 0) return;
-    
+
     setCondensing(true);
     try {
       const allContent = results.map(r => r.content).join('\n\n');
       const condensed = await AIService.condenseNotes(allContent);
       setCondensedContent(condensed);
-      
+
       toast({
         title: "Content condensed!",
         description: "AI has summarized the key points from all sources."
@@ -117,6 +123,88 @@ export default function Explore() {
     }
   };
 
+  const handleStudyThis = (result: CrawlResult) => {
+    setStudyingResult(result);
+  };
+
+  const handleSaveToNotes = async (result: CrawlResult) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to save notes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .insert({
+          user_id: user.id,
+          title: `${result.topic} - ${result.source}`,
+          content: result.content,
+          tags: [result.topic, result.source]
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Note saved!",
+        description: "Content has been saved to your notes."
+      });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        title: "Save failed",
+        description: "There was an error saving the note.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSaveCondensed = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to save notes.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!condensedContent) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .insert({
+          user_id: user.id,
+          title: `${params.get("q")} - AI Summary`,
+          content: condensedContent,
+          tags: [params.get("q") || 'summary', 'ai-condensed']
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Summary saved!",
+        description: "AI summary has been saved to your notes."
+      });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        title: "Save failed",
+        description: "There was an error saving the summary.",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     const initialQuery = params.get("q");
     if (initialQuery && initialQuery !== query) {
@@ -124,6 +212,62 @@ export default function Explore() {
       handleSearch(initialQuery);
     }
   }, [params]);
+
+  if (studyingResult) {
+    const noteForStudying: Note = {
+      id: 'temp-' + Date.now(),
+      title: `${studyingResult.topic} - ${studyingResult.source}`,
+      content: studyingResult.content,
+      tags: [studyingResult.topic, studyingResult.source],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user_id: user?.id || '',
+      source: { name: studyingResult.source, url: studyingResult.url }
+    };
+
+    return (
+      <AppLayout>
+        <NoteEditor
+          note={noteForStudying}
+          onClose={() => setStudyingResult(null)}
+          onSave={async (noteData) => {
+            if (!user) {
+              toast({
+                title: "Authentication required",
+                description: "Please sign in to save notes.",
+                variant: "destructive"
+              });
+              return;
+            }
+
+            try {
+              const { error } = await supabase
+                .from('notes')
+                .insert({
+                  user_id: user.id,
+                  ...noteData
+                });
+
+              if (error) throw error;
+
+              toast({
+                title: "Note saved!",
+                description: "Your study note has been saved."
+              });
+              setStudyingResult(null);
+            } catch (error) {
+              console.error("Save error:", error);
+              toast({
+                title: "Save failed",
+                description: "There was an error saving the note.",
+                variant: "destructive"
+              });
+            }
+          }}
+        />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -179,7 +323,7 @@ export default function Explore() {
                 <Card key={index} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <CardTitle className="text-lg mb-1">
                           {result.topic} - {result.source}
                         </CardTitle>
@@ -187,7 +331,16 @@ export default function Explore() {
                           <Badge variant="secondary">{result.source}</Badge>
                         </CardDescription>
                       </div>
-                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      {result.url && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 flex-shrink-0"
+                          onClick={() => window.open(result.url, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -195,11 +348,19 @@ export default function Explore() {
                       {result.content.substring(0, 200)}...
                     </p>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleStudyThis(result)}
+                      >
                         <BookOpen className="h-4 w-4 mr-2" />
                         Study This
                       </Button>
-                      <Button size="sm" variant="ghost">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleSaveToNotes(result)}
+                      >
                         Save to Notes
                       </Button>
                     </div>
@@ -238,14 +399,32 @@ export default function Explore() {
                         className="min-h-[200px] bg-muted"
                       />
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleSaveCondensed}
+                        >
                           <Download className="h-4 w-4 mr-2" />
                           Save as Note
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            handleSaveCondensed();
+                            navigate('/notes');
+                          }}
+                        >
                           Generate Flashcards
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            handleSaveCondensed();
+                            navigate('/notes?quiz=true');
+                          }}
+                        >
                           Create Quiz
                         </Button>
                       </div>
