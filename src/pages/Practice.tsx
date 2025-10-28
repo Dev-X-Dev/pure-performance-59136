@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState, useEffect } from "react";
-import { Play, Pause, RotateCcw, Clock, Target, CheckCircle } from "lucide-react";
+import { Play, Pause, RotateCcw, Clock, Target, CheckCircle, Coffee, Brain } from "lucide-react";
 
 export default function Practice() {
   const [isActive, setIsActive] = useState(false);
@@ -44,8 +44,13 @@ export default function Practice() {
   const handlePause = () => setIsActive(false);
   const handleReset = () => {
     setIsActive(false);
-    setTime(25 * 60);
-    setIsBreak(false);
+    setTime(isBreak ? 5 * 60 : 25 * 60);
+  };
+
+  const toggleMode = () => {
+    setIsActive(false);
+    setIsBreak(!isBreak);
+    setTime(!isBreak ? 5 * 60 : 25 * 60);
   };
 
   return (
@@ -72,6 +77,30 @@ export default function Practice() {
               }
             </CardDescription>
           </CardHeader>
+          <div className="px-6 pb-4">
+            <div className="flex gap-2 justify-center">
+              <Button
+                variant={!isBreak ? "default" : "outline"}
+                size="sm"
+                onClick={toggleMode}
+                disabled={isActive}
+                className="gap-2"
+              >
+                <Brain className="h-4 w-4" />
+                Focus (25min)
+              </Button>
+              <Button
+                variant={isBreak ? "default" : "outline"}
+                size="sm"
+                onClick={toggleMode}
+                disabled={isActive}
+                className="gap-2"
+              >
+                <Coffee className="h-4 w-4" />
+                Break (5min)
+              </Button>
+            </div>
+          </div>
           <CardContent>
             <div className="space-y-6">
               {/* Timer Display */}

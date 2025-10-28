@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { Search, ExternalLink, BookOpen, Sparkles, Download } from "lucide-react";
 import { store } from "@/lib/store";
 import { CrawlerService, CrawlResult } from "@/services/crawlerService";
+import { supabase } from "@/integrations/supabase/client";
 import { AIService } from "@/services/aiService";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -36,11 +37,37 @@ export default function Explore() {
       // Update URL
       setParams({ q: searchQuery });
       
-      // Crawl educational sites for real content
-      const crawlResults = await CrawlerService.crawlTopic(searchQuery);
-      setResults(crawlResults);
+      // Try the multi-source web scraper first for real educational content
+      try {
+        const { data, error: scraperError } = await supabase.functions.invoke('web-scraper', {
+          body: { topic: searchQuery }
+        });
+
+        if (!scraperError && data?.results?.length > 0) {
+          console.log('Web scraper found', data.results.length, 'sources');
+          // Convert web scraper results to CrawlResult format
+          const webResults = data.results.map((result: any) => ({
+            source: result.source,
+            topic: searchQuery,
+            content: result.content,
+            url: result.url,
+            crawled_at: new Date().toISOString()
+          }));
+          setResults(webResults);
+        } else {
+          // Fallback to AI-generated content if scraper returns no results
+          console.log('Web scraper returned no results, using AI fallback');
+          const crawlResults = await CrawlerService.crawlTopic(searchQuery);
+          setResults(crawlResults);
+        }
+      } catch (scraperErr) {
+        console.error('Web scraper error, using AI fallback:', scraperErr);
+        // Fallback to AI-generated content
+        const crawlResults = await CrawlerService.crawlTopic(searchQuery);
+        setResults(crawlResults);
+      }
       
-      if (crawlResults.length === 0) {
+      if (results.length === 0) {
         toast({
           title: "No results found",
           description: "Try a different search term or check back later.",
@@ -49,7 +76,7 @@ export default function Explore() {
       } else {
         toast({
           title: "Content found!",
-          description: `Found ${crawlResults.length} educational resources on ${searchQuery}`
+          description: `Found educational resources from multiple sources`
         });
       }
     } catch (error) {
