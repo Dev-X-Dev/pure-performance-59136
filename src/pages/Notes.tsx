@@ -241,12 +241,15 @@ export default function Notes() {
   const { notes, loading, createNote, updateNote, deleteNote } = useNotes();
 
   const filteredNotes = useMemo(() => {
+    if (!searchTerm && !selectedTag) return notes;
+
     return notes.filter(note => {
-      const matchesSearch = !searchTerm || 
+      const matchesSearch = !searchTerm ||
         note.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        note.content?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesTag = !selectedTag || 
+        note.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        note.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesTag = !selectedTag ||
         note.tags?.some(tag => tag.toLowerCase().includes(selectedTag.toLowerCase()));
 
       return matchesSearch && matchesTag;

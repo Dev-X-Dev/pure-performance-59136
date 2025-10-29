@@ -25,24 +25,33 @@ export default function Explore() {
   const [condensedContent, setCondensedContent] = useState<string>("");
   const [condensing, setCondensing] = useState(false);
   const [studyingResult, setStudyingResult] = useState<CrawlResult | null>(null);
+  const [recentTopics, setRecentTopics] = useState<string[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
 
   const handleSearch = async (searchQuery: string) => {
     if (!searchQuery.trim()) return;
-    
+
     setLoading(true);
     setCondensedContent("");
-    
+
     try {
-      // Add to recent topics
+      // Track recent topic in database
+      if (user) {
+        await supabase.rpc('track_recent_topic', {
+          topic_text: searchQuery,
+          topic_type_text: 'search'
+        });
+      }
+
+      // Also store locally for non-authenticated users
       const recents = store.get<string[]>("recent:topics", []);
       const next = [searchQuery, ...recents.filter((x) => x !== searchQuery)].slice(0, 8);
       store.set("recent:topics", next);
-      
+
       // Update URL
       setParams({ q: searchQuery });
-      
+
       // Try the multi-source web scraper first for real educational content
       try {
         const { data, error: scraperError } = await supabase.functions.invoke('web-scraper', {
@@ -51,7 +60,6 @@ export default function Explore() {
 
         if (!scraperError && data?.results?.length > 0) {
           console.log('Web scraper found', data.results.length, 'sources');
-          // Convert web scraper results to CrawlResult format
           const webResults = data.results.map((result: any) => ({
             source: result.source,
             topic: searchQuery,
@@ -61,18 +69,16 @@ export default function Explore() {
           }));
           setResults(webResults);
         } else {
-          // Fallback to AI-generated content if scraper returns no results
           console.log('Web scraper returned no results, using AI fallback');
           const crawlResults = await CrawlerService.crawlTopic(searchQuery);
           setResults(crawlResults);
         }
       } catch (scraperErr) {
         console.error('Web scraper error, using AI fallback:', scraperErr);
-        // Fallback to AI-generated content
         const crawlResults = await CrawlerService.crawlTopic(searchQuery);
         setResults(crawlResults);
       }
-      
+
       if (results.length === 0) {
         toast({
           title: "No results found",
@@ -212,6 +218,28 @@ export default function Explore() {
       handleSearch(initialQuery);
     }
   }, [params]);
+
+  useEffect(() => {
+    const loadRecentTopics = async () => {
+      if (user) {
+        try {
+          const { data, error } = await supabase.rpc('get_recent_topics', { limit_count: 8 });
+          if (!error && data) {
+            setRecentTopics(data.map((item: any) => item.topic));
+          }
+        } catch (error) {
+          console.error('Error loading recent topics:', error);
+        }
+      }
+
+      const localRecents = store.get<string[]>("recent:topics", []);
+      if (!user && localRecents.length > 0) {
+        setRecentTopics(localRecents);
+      }
+    };
+
+    loadRecentTopics();
+  }, [user]);
 
   if (studyingResult) {
     const noteForStudying: Note = {
@@ -438,28 +466,58 @@ export default function Explore() {
 
         {/* Empty State */}
         {!loading && results.length === 0 && !params.get("q") && (
-          <Card className="p-12 text-center">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-lg font-semibold mb-2">Explore Any Topic</h3>
-            <p className="text-muted-foreground mb-6">
-              Search for any subject and get AI-powered study materials, summaries, and resources
-            </p>
-            <div className="flex flex-wrap gap-2 justify-center">
-              {["Photosynthesis", "Machine Learning", "World History", "Calculus", "Chemistry"].map((topic) => (
-                <Button
-                  key={topic}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setQuery(topic);
-                    handleSearch(topic);
-                  }}
-                >
-                  {topic}
-                </Button>
-              ))}
-            </div>
-          </Card>
+          <div className="space-y-4">
+            <Card className="p-12 text-center">
+              <div className="text-6xl mb-4">🔍</div>
+              <h3 className="text-lg font-semibold mb-2">Explore Any Topic</h3>
+              <p className="text-muted-foreground mb-6">
+                Search for any subject and get AI-powered study materials, summaries, and resources
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {["Photosynthesis", "Machine Learning", "World History", "Calculus", "Chemistry"].map((topic) => (
+                  <Button
+                    key={topic}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setQuery(topic);
+                      handleSearch(topic);
+                    }}
+                  >
+                    {topic}
+                  </Button>
+                ))}
+              </div>
+            </Card>
+
+            {recentTopics.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Recent Searches</CardTitle>
+                  <CardDescription>
+                    Quick access to your recent topics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {recentTopics.map((topic, index) => (
+                      <Badge
+                        key={index}
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-secondary/80"
+                        onClick={() => {
+                          setQuery(topic);
+                          handleSearch(topic);
+                        }}
+                      >
+                        {topic}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </div>
     </AppLayout>
